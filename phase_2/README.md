@@ -164,6 +164,12 @@ is the measured value.
 `predictions.csv`. Ground truth is the thick pink box, the prediction the thin
 cyan one, with a ±6 px inset of the box corner where the two are separable.*
 
+**The search frame is never rotated in Phase 2.** The pose is carried on the
+reference side: the matcher downscales the reference by `z` and rotates *that
+template* by `theta` before correlating it against an unrotated search frame
+(`make_template`). Column 2 shows the template the matcher actually uses, which
+is why it is the panel that tilts.
+
 The 20-pair audited package (sets A/B/C/D), scored on the published rubric.
 Efficiency (5) and the written analysis (10) are not measurable locally, so the
 total is out of 85.
