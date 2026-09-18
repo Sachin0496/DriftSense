@@ -1,0 +1,9 @@
+# Byte-code and local virtualenvs -- never part of the delivery.
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# Output written by a run.
+predictions.csv
+*/sample/predictions.csv
