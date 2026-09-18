@@ -156,7 +156,31 @@ is the measured value.
 
 ---
 
-## 7. Runtime
+## 7. Results
+
+![Phase 2 results](results.png)
+
+*Every panel is an original image, and the boxes come from this code's actual
+`predictions.csv`. Ground truth is the thick pink box, the prediction the thin
+cyan one, with a ±6 px inset of the box corner where the two are separable.*
+
+The 20-pair audited package (sets A/B/C/D), scored on the published rubric.
+Efficiency (5) and the written analysis (10) are not measurable locally, so the
+total is out of 85.
+
+| block | score |
+| --- | --- |
+| localisation | 36.50 / 40 — median 0.98 px, 0 pairs beyond 5 px |
+| scale | 9.75 / 10 |
+| rotation | 9.50 / 10 — median \|dθ\| 0.035° |
+| rejection F1 | 15.00 / 15 — 16/16 found, 4/4 absent rejected, no false positives |
+| calibration AUC | 10.00 / 10 |
+| **total** | **80.75 / 85** |
+
+Rejection and calibration are saturated; the remaining loss is sub-pixel
+localisation on the harder scale-8 and scale-12 pairs.
+
+## 8. Runtime
 
 Measured on the 20-pair audited package, 4 threads:
 
@@ -168,7 +192,7 @@ Measured on the 20-pair audited package, 4 threads:
 
 Well inside the 20 s/pair hard timeout. Memory stays under ~1 GB.
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | symptom | cause |
 | --- | --- |

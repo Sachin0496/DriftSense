@@ -209,7 +209,43 @@ need to touch any of them.
 Note that step 1 and 2 use no neural network at all — only OpenCV and NumPy
 geometry. The checkpoint is used by the fallback path.
 
-## 8. Runtime
+## 8. Results
+
+![Phase 3 results](results.png)
+
+*Every panel is an original image. The CAD panels are drawn from the reference
+`.gds` the pairs file names, the search frames are the generator's own
+captures, and the boxes come from this code's actual `predictions.csv` — not
+from an illustration. Ground truth is the thick pink box, the prediction the
+thin cyan one; at these errors they coincide, so each result panel carries a
+±6 px inset of the box corner where the two are separable.*
+
+600 pairs from the organizers' CAD pipeline, 200 per severity tier, scored on
+the published rubric. Efficiency (5) and the written analysis (10) are not
+measurable locally, so the total is out of 85.
+
+| tier | loc /40 | scale /10 | rot /10 | reject /15 | calib /10 | **/85** | median err | ≤1 px |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| nominal | 40.00 | 10.00 | 10.00 | 15.00 | 10.00 | **85.00** | 0.014 px | 183/183 |
+| medium | 40.00 | 10.00 | 10.00 | 15.00 | 10.00 | **85.00** | 0.016 px | 183/183 |
+| harsh | 40.00 | 10.00 | 10.00 | 15.00 | 10.00 | **85.00** | 0.029 px | 183/183 |
+
+Every present pair inside 1 px on all three tiers, every absent pair rejected,
+no real pair lost. Median rotation error 0.002–0.005°.
+
+### What this depends on
+
+The single assumption that carries the score is `search_gds_path`. Measured on
+the same harsh 200 pairs, with the column and without it:
+
+| | /85 | loc /40 | median err | ≤1 px | F1 | s/pair |
+| --- | --- | --- | --- | --- | --- | --- |
+| with search GDS | **85.00** | 40.00 | 0.029 px | 183/183 | 1.000 | 0.31 |
+| without (fallback) | **45.32** | 16.74 | 57.75 px | 30/183 | 0.692 | 2.11 |
+
+A 39.7-point swing, and 7× slower. See section 4.
+
+## 9. Runtime
 
 Measured on 600 pairs (three severity tiers × 200), 4 threads:
 
@@ -221,7 +257,7 @@ Measured on 600 pairs (three severity tiers × 200), 4 threads:
 
 Well inside the 20 s/pair hard timeout. Memory stays under ~1 GB.
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 | symptom | cause |
 | --- | --- |
