@@ -1,5 +1,13 @@
 # Phase 2 — SEM reference → SEM search
 
+![Phase 2 results](results.png)
+
+*Nine real pairs. Ground truth in **green**, this code's prediction in **red**,
+with the reference image inset top-left of each tile. Boxes come from an actual
+`predictions.csv`, not an illustration; where only green is visible the two
+agree to within the line width.*
+
+
 Locate a high-resolution **reference** patch inside a low-resolution **search**
 frame of a repeating semiconductor layout, and report where it is, how it is
 rotated and scaled, and whether it is there at all.
@@ -158,17 +166,9 @@ is the measured value.
 
 ## 7. Results
 
-![Phase 2 results](results.png)
-
 *Every panel is an original image, and the boxes come from this code's actual
 `predictions.csv`. Ground truth is the thick pink box, the prediction the thin
 cyan one, with a ±6 px inset of the box corner where the two are separable.*
-
-**The search frame is never rotated in Phase 2.** The pose is carried on the
-reference side: the matcher downscales the reference by `z` and rotates *that
-template* by `theta` before correlating it against an unrotated search frame
-(`make_template`). Column 2 shows the template the matcher actually uses, which
-is why it is the panel that tilts.
 
 The 20-pair audited package (sets A/B/C/D), scored on the published rubric.
 Efficiency (5) and the written analysis (10) are not measurable locally, so the

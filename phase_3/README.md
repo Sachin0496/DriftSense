@@ -1,5 +1,13 @@
 # Phase 3 — CAD reference → SEM search
 
+![Phase 3 results](results.png)
+
+*Nine real pairs, three per severity tier. Ground truth in **green**, this
+code's prediction in **red**, with the rendered CAD reference inset top-left of
+each tile. Boxes come from an actual `predictions.csv`; where only green is
+visible the two agree to within the line width.*
+
+
 Locate a **GDSII design** inside a **1000 × 1000 px SEM capture** taken at
 10 nm/px, and report where it is, how it is rotated and scaled, and whether it
 is there at all.
@@ -210,8 +218,6 @@ Note that step 1 and 2 use no neural network at all — only OpenCV and NumPy
 geometry. The checkpoint is used by the fallback path.
 
 ## 8. Results
-
-![Phase 3 results](results.png)
 
 *Every panel is an original image. The CAD panels are drawn from the reference
 `.gds` the pairs file names, the search frames are the generator's own
