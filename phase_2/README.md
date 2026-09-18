@@ -2,10 +2,11 @@
 
 ![Phase 2 results](results.png)
 
-*Nine real pairs. Ground truth in **green**, this code's prediction in **red**,
-with the reference image inset top-left of each tile. Boxes come from an actual
-`predictions.csv`, not an illustration; where only green is visible the two
-agree to within the line width.*
+*Nine pairs from the **organizers' own generator** (`generator/generate_dataset.py`
+→ `src/pipeline.py`), decoded by `register.py`. Ground truth in **green**, this
+code's prediction in **red**, the reference image inset top-left of each tile.
+The search frames carry **no rotation** — the lattice is axis-aligned in all
+nine, measured at 0.12° (the histogram bin centre, i.e. zero).*
 
 
 Locate a high-resolution **reference** patch inside a low-resolution **search**
@@ -166,25 +167,28 @@ is the measured value.
 
 ## 7. Results
 
-*Every panel is an original image, and the boxes come from this code's actual
-`predictions.csv`. Ground truth is the thick pink box, the prediction the thin
-cyan one, with a ±6 px inset of the box corner where the two are separable.*
+Measured on nine pairs from the organizers' generator, seed 20260918, decoded
+through `register.py` with shipped settings:
 
-The 20-pair audited package (sets A/B/C/D), scored on the published rubric.
-Efficiency (5) and the written analysis (10) are not measurable locally, so the
-total is out of 85.
-
-| block | score |
+| | |
 | --- | --- |
-| localisation | 36.50 / 40 — median 0.98 px, 0 pairs beyond 5 px |
-| scale | 9.75 / 10 |
-| rotation | 9.50 / 10 — median \|dθ\| 0.035° |
-| rejection F1 | 15.00 / 15 — 16/16 found, 4/4 absent rejected, no false positives |
-| calibration AUC | 10.00 / 10 |
-| **total** | **80.75 / 85** |
+| found | **9 / 9** — no pair lost |
+| median error | **1.44 px** (min 0.80, max 2.28) |
+| rotation | reported **θ ≈ 0°** on every pair (\|θ\| ≤ 0.06°), matching a generator that applies none |
+| scale | **10.00 ± 0.10** against a fixed 10× |
+| runtime | median **1.37 s/pair**, p90 1.93 s |
 
-Rejection and calibration are saturated; the remaining loss is sub-pixel
-localisation on the harder scale-8 and scale-12 pairs.
+Two caveats, stated rather than buried:
+
+**The error is measured against the organizers' raw `gt_x`/`gt_y`,** which are
+computed on the pre-imaging geometry. `src/sem_imaging.image_search` then applies
+raster drift (`shear_amplitude_px` defaults to 1.5) *after* those coordinates are
+fixed, so roughly half the amplitude sits between the label and where the pattern
+actually is. That accounts for a large part of the 1.44 px.
+
+**This generator emits no absent pairs and no rotation,** so rejection F1 and
+rotation credit are not exercised by this set. Both are exercised by the
+organizers' 20-pair audited package, where rejection scores 15/15.
 
 ## 8. Runtime
 
