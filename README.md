@@ -14,6 +14,11 @@ This is the **inference delivery**. It contains the two graded entry points,
 the weights, and nothing else — no training code, no dataset generator, no
 evaluation harness, no development tooling.
 
+Comments in the shipped code cite the measurements behind each constant, and
+some name an issue or PR number (`#36`, `PR #51`). Those refer to the
+development repository's tracker, which is **not** part of this delivery; they
+are provenance for a number, never a file you are expected to find here.
+
 ```
 .
 ├── phase_2/          reference is an SEM image
@@ -53,6 +58,10 @@ cd phase_3
 python3.11 -m venv venv && ./venv/bin/pip install -r requirements.txt
 ./venv/bin/python phase3.py --input sample/pairs.csv --output sample/predictions.csv
 ```
+
+> On Windows the venv puts its executables in `venv\Scripts\` rather than
+> `venv/bin/`, so substitute `venv\Scripts\python` and `venv\Scripts\pip`.
+> Everything else is identical; the pinned wheels are the same.
 
 Both bundled samples include a site with **no true match**, so you can confirm
 the rejection path works as well as the localisation path.

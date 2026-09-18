@@ -39,7 +39,7 @@ from driftsense.verification import (
 TIE_REL_TOL = 0.04
 
 # Half-width of the ZNCC snap window, in search pixels. Tuned on validation
-# (scripts/ablate.py): a wider window improves nothing and costs accuracy,
+# (the ablation sweep): a wider window improves nothing and costs accuracy,
 # because at +/-8px or more the snap can reach an adjacent repeat and drag a
 # correct coarse prediction one period off. +/-4px is enough to absorb the
 # 4px response-grid stride while staying inside the correct cell.
@@ -47,7 +47,7 @@ REFINE_RADIUS = 4
 
 # TTA cluster arbitration: candidate regions are scored as
 #   ZNCC(region) + VERIFY_ALPHA * (normalised network confidence)
-# Tuned on validation (scripts/sweep_aggregation.py). The result is flat across
+# Tuned on validation (the aggregation sweep). The result is flat across
 # alpha 0.35-0.5 and any top_k >= 3, and worth exactly +1 sample in 300 on both
 # validation and test -- real but small. Set VERIFY_ALPHA = 0 to disable.
 VERIFY_ALPHA = 0.5
@@ -202,7 +202,7 @@ POSE_SKIP_ABOVE = 0.70
 # Gaussians keeps the band that carries the pattern and discards both.
 #
 # The same filter beat raw ZNCC at *verifying* hypotheses in the same
-# experiment (net +10 pairs against +7; scripts/verify_scores.py), which is
+# experiment (net +10 pairs against +7; the score verification run), which is
 # what suggested trying it one stage earlier. A rank transform recovered as
 # many failures but broke three times as many successes, so it is not used.
 def _band(img: np.ndarray, s1: float = 1.0, s2: float = 4.0) -> np.ndarray:
@@ -258,7 +258,8 @@ PHASE2_ROTATION_BOUNDS = (-5.0, 5.0)
 # Sub-pixel drift recovery (see `drift_row_refine`). The lag covers 3 sigma of
 # the severity-4 drift jitter (sd up to ~2.1 px); a narrower window clips the
 # peak exactly where the points are. Both other values are measured optima on
-# the full 1,750 present pairs -- see the A/B table in `.agents/SUBPIXEL_DRIFT.md`.
+# the full 1,750 present pairs -- see the A/B table in the sub-pixel drift
+# report.
 DRIFT_ROW_LAG = 12
 DRIFT_ROW_MIN_CORR = 0.30
 DRIFT_MAX_SHIFT = 5.0      # upper bound; the effective clamp is drift-scaled
@@ -301,7 +302,7 @@ DRIFT_SHRINK_SIGMA = 0.25
 # Both are implemented, both are measured, and both are OFF: once the shrinkage
 # above is in place neither is worth its promotion gate. The measurements are
 # kept here because they are the reason, and because the mechanisms are the
-# obvious next things to reach for. `scripts/ab_drift_rows.py` reproduces them;
+# obvious next things to reach for. `the drift A/B run` reproduces them;
 # splits are two seed-disjoint 500-pair v2 sets (360 present pairs each), and
 # the unit is localisation points out of 40.
 #
@@ -390,7 +391,7 @@ DESTREAK_K = 4.0           # MADs above the running median that count as a strea
 # the finer grid kept the wider refine reach was worse still (73.76 against
 # 74.32). So the sampling really is not the binding constraint: the coarse
 # score itself is noise-dominated on degraded frames, and ranking, not
-# resolution, is what fails. See .agents/PHASE2_STATE.md for the next lever
+# resolution, is what fails. See the Phase 2 status note for the next lever
 # (a rank-transform coarse score, which is robust to the impulse noise that
 # dominates these failures).
 COARSE_SCALES = 17
@@ -430,12 +431,12 @@ RERANK_MULTIPLIER = 2
 # the rubric subtotal moved -0.003/85 (76.942 -> 76.939; Set A +0.0009,
 # Set B -0.0021) -- under the +0.35 promotion gate, so RERANK_ROTATION stays
 # False. The wrong tiles this would fix mostly migrate to selector failures
-# (issue #5) instead of disappearing. See tests/test_pose_rotation_ranking.py
-# and scripts/trace_candidates.py for the regression coverage and the tracing
+# (issue #5) instead of disappearing. See the pose-rotation ranking test
+# and the candidate tracer for the regression coverage and the tracing
 # tool the A/B was built on. With this False, `pose_candidates` reproduces the
 # previous `peaks[:k]` ranking exactly: the shortlist is sliced straight to k
 # and no rotation scan is cached, so the refine loop takes its original
-# direct-scan path (pinned by tests/test_pose_rotation_ranking.py).
+# direct-scan path (pinned by the pose-rotation ranking test).
 #
 # Reconsider only if downstream selector behaviour (issue #5) changes enough
 # to change this A/B's verdict -- re-run the full 2,250-pair A/B and record
@@ -485,7 +486,8 @@ def _refine_pose_local(reference, search, f0: float, r0: float,
     polish_pose against the located match. So the budget is 1 round x 4
     iterations here, against the deeper search downstream.
 
-    The budget was measured, not assumed (.agents/PR51_CAMPAIGN.md). Against
+    The budget was measured, not assumed (the rotation campaign report).
+    Against
     the pre-PR-#51 2x8 here plus polish_pose 2x7, over three independent
     200-pair sets:
 
@@ -712,7 +714,7 @@ def pose_candidates(reference: np.ndarray, search: np.ndarray, k: int = 3,
     # sound in principle and a future set with genuinely clustered candidates
     # could pay for it -- but enabling it means re-running the 600-pair A/B,
     # not assuming the numbers above transfer. Evidence:
-    # .agents/PR51_CAMPAIGN.md.
+    # the rotation campaign report.
     if os.environ.get("DRIFTSENSE_DEDUP", "0") != "0":
         deduped = []
         for c in out:
@@ -1941,14 +1943,14 @@ def locate_phase2(model, reference: np.ndarray, search: np.ndarray, device,
 
     # Reported confidence. TWO definitions exist, selected by
     # driftsense.config.SHIPPED_CONFIDENCE (the ONE definition; the parity
-    # test pins register.py and eval_ext.py to it):
+    # test pins register.py and the external evaluator to it):
     #
     # "fused6" (implemented, NOT shipped -- measured out, see config): a
     # 6-feature logistic over statistics this decode
     # already computes -- score, zncc, peak_ratio, pose_peak, psr, apce
     # (driftsense.calibration.calibrate(), frozen constants, zero inference
     # cost). Held-out 4-fold CV on the 2,250-pair holdout: AUC 0.9877 ->
-    # 0.9915 vs the legacy scalar (.agents/B_CALIBRATION_REPORT.md, protocol
+    # 0.9915 vs the legacy scalar (the calibration report, protocol
     # identical to REJECTOR_FINDINGS.md). A monotone map of the legacy scalar
     # provably cannot move AUC (Guo et al., arXiv:1706.04599); the gain comes
     # from recombining the six signals, not from rescaling one.
@@ -2007,8 +2009,9 @@ def locate_phase2(model, reference: np.ndarray, search: np.ndarray, device,
     else:
         # Optional selectors change only the chosen hypothesis. Keep the
         # WINNER's rank/band (drop dog — only computed under return_hypotheses):
-        # eval_ext records them, which is what lets rejector_cv.py fit the
-        # present/absent rejector on features that exist at inference time
+        # the external evaluator records them, which is what lets the
+        # present/absent rejector be fit on features that exist at inference
+        # time
         # (issue #6). The default zncc path never computes them, so the result
         # contract register.py consumes is unchanged there.
         best.pop("dog", None)

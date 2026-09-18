@@ -4,11 +4,12 @@ decode is register.py + locate_phase2 (pose search, hypothesis selection,
 threshold contract); see the Phase 2 section of README.md.
 
 C-01 of the static audit: evaluation and CLI inference were two different
-systems -- evaluate.py called locate/locate_tta directly, while infer.py ran
+systems -- the development evaluator called locate/locate_tta directly, while
+infer.py ran
 pose estimation and adaptive routing first, so reported metrics never
 measured the behaviour users receive. This module is now the ONE definition
 of the shipped decode: infer.predict and evaluate.run_split both call
-predict_policy, and tests/test_policy_parity.py pins them together.
+predict_policy, and the policy parity test pins them together.
 
 Policy, in order:
 1. Estimate the reference->search scale factor and rotation (choose_pose).
@@ -27,7 +28,7 @@ import numpy as np
 
 # Peak-ratio below which one view is trusted without dihedral voting.
 #
-# Measured, not guessed (scripts/tune_routing.py, 500 held-out scenes across
+# Measured, not guessed (the routing tuner, 500 held-out scenes across
 # two splits). The highest threshold that reproduces full TTA *exactly* -- same
 # acc@5px, same mean, same p99 -- is 0.90 on the randomized split but only 0.70
 # on `severe`, so 0.70 is what ships: tuning to the easier split would buy

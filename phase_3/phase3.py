@@ -84,7 +84,7 @@ PHASE3_EXPECTED_PRESENT_FRAC = 0.92
 
 
 # The Phase 3 decode, as keyword arguments to locate_phase2. ONE definition:
-# main() and the evaluation harness (scripts/phase3_eval.py) both go through
+# main() and the evaluation harness (the Phase 3 evaluator) both go through
 # decode(), so a measured configuration is the shipped one.
 DECODE = dict(
     refine=True,
@@ -228,7 +228,7 @@ def main(argv=None) -> int:
         raise SystemExit(
             "FATAL: learned model failed to load from "
             f"{a.weights!r} -- refusing to write {a.output!r} with the "
-            "classical fallback (issue #36). Pass --allow-fallback to decode "
+            "classical fallback. Pass --allow-fallback to decode "
             "with the classical fallback instead (local/debug only).")
 
     out_dir = os.path.dirname(os.path.abspath(a.output))
@@ -248,7 +248,7 @@ def main(argv=None) -> int:
         for n, r in enumerate(rows):
             pid = r.pair_id
             out = {"pair_id": pid, "x": 0, "y": 0, "theta": 0, "scale": 0,
-                   "found": 0, "score": 0.0}
+                   "found": 0, "score": f"{0.0:.6f}"}
             t0 = time.perf_counter()
             try:
                 # A GdsError or unreadable image here is a per-pair failure,
@@ -317,7 +317,8 @@ def main(argv=None) -> int:
 
     if times:
         srt = sorted(times)
-        med = srt[len(srt) // 2]
+        mid = len(srt) // 2
+        med = srt[mid] if len(srt) % 2 else 0.5 * (srt[mid - 1] + srt[mid])
         p90 = srt[min(int(0.9 * len(srt)), len(srt) - 1)]
         print(f"# runtime: median {med:.3f} p90 {p90:.3f} max {max(times):.3f} "
               f"n={len(times)}", file=sys.stderr)

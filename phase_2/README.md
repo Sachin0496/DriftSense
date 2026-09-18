@@ -19,6 +19,10 @@ python3.11 -m venv venv
 ./venv/bin/pip install -r requirements.txt
 ```
 
+> On Windows the venv puts its executables in `venv\Scripts\` rather than
+> `venv/bin/`, so substitute `venv\Scripts\python` and `venv\Scripts\pip`.
+> Everything else is identical; the pinned wheels are the same.
+
 `requirements.txt` is pinned from a working environment, scoped to what this
 entry point actually imports (torch, OpenCV, NumPy and their transitive
 dependencies). Nothing for training, plotting or notebooks.
@@ -72,9 +76,16 @@ accepted.
 Extra columns are ignored, so a manifest carrying ground truth alongside the
 paths works as a `pairs.csv` unchanged.
 
-An exact match wins outright. If no column matches exactly, a substring
-fallback is tried — but **only if it selects exactly one column**. Two or more
-candidates is an error, not a coin flip.
+An exact match wins outright. If a header carries **two** accepted spellings
+for one role, the winner is the one listed earliest in the table above — the
+order is the priority order — and the run prints a `[warn]` on stderr naming
+the winner and the columns it ignored. It does not abort: the choice is
+well defined, and failing a batch over a harmless extra column is the worse
+error.
+
+If no column matches exactly, a substring fallback is tried — but **only if it
+selects exactly one column**. Two or more candidates there *is* an error, not a
+coin flip, because no priority order covers it.
 
 ### The images
 
@@ -147,12 +158,19 @@ disappearing.
 | `--output` | *required* | `predictions.csv` |
 | `--weights` | `weights/driftsense.pt` | checkpoint, resolved next to `register.py` |
 | `--threads` | `0` (auto) | caps to `min(4, cores)` to match the reference machine |
-| `--threshold` | shipped | `found = score >= threshold` |
+| `--threshold` | shipped | `found = score >= threshold`. **Learned path only** — the ZNCC fallback ignores it and uses its own calibrated threshold |
 | `--quiet` | off | suppress per-pair progress |
 | `--allow-fallback` | off | decode with the classical matcher if the checkpoint will not load. **Local debugging only** — never for a graded run |
 
-The remaining flags exist so the shipped constants can be A/B'd. Every default
+The remaining two exist so the shipped constants can be A/B'd. Every default
 is the measured value.
+
+| flag | default | what it does |
+| --- | --- | --- |
+| `--verification` | `zncc` | hypothesis selector: `zncc` \| `consensus` \| `majority` |
+| `--label-convention` | shipped | pixel convention the `x, y` columns are written in: `center` (pixel *i* spans `[i-0.5, i+0.5]`) or `edge` (`[i, i+1)`) |
+
+`register.py --help` is the authority; it lists exactly these and nothing else.
 
 ---
 
@@ -204,5 +222,5 @@ Well inside the 20 s/pair hard timeout. Memory stays under ~1 GB.
 | --- | --- |
 | `could not resolve the ... column` | header has no recognised spelling, or two columns match ambiguously |
 | `FATAL: learned model failed to load` | `weights/driftsense.pt` missing or truncated. It must be ~16.5 MB |
-| `mass_failure` on stderr | a large fraction of pairs failed or were declined — usually wrong paths. Check they resolve relative to the CSV |
+| `[MASS FAILURE]` / `# mass_failure` on stderr | a large fraction of pairs raised or were declined — usually wrong paths. Check they resolve relative to the CSV. Rows are still written (declines), and the exit code stays `0`; the alarm is the signal, not the exit code |
 | every pair `found=0` | almost always a path problem, not a model problem. Open one image by hand |

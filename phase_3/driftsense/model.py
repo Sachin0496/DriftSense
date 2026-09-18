@@ -173,7 +173,7 @@ class DriftSenseNet(nn.Module):
         # Single-slot, keyed on the input bytes + device; never served in
         # training mode. use_template_cache=False restores the pre-E1
         # behaviour (every hypothesis re-encodes) -- the A/B benchmark's
-        # "existing" baseline. See tests/test_search_feat_cache.py.
+        # "existing" baseline. See the search-feature cache test.
         self.use_template_cache = True
         self._tf_cache = None
         # Issue #21: the cache key covers the input bytes, not the parameter

@@ -14,7 +14,7 @@ come from recombining signals the decoder already emits. This module does
 exactly that: a 9-feature logistic over the outputs `locate_phase2` already
 produces. Zero inference cost — no second pass, no image access.
 
-Feature semantics (see scripts/fit_rejector.py for the full argument):
+Feature semantics (see the rejector fit tool for the full argument):
   score       network peak confidence (relative — can be confident on a decoy)
   zncc        full-resolution correlation at the chosen centre (absolute)
   peak_ratio  runner-up / winner among separated peaks (contested decision)
@@ -26,7 +26,7 @@ Feature semantics (see scripts/fit_rejector.py for the full argument):
   margin      winner's min(score, zncc) margin over the runner-up — the
               closest existing analogue of the correlogram r_delta of
               Buniatyan et al. (arXiv:1705.08593); see
-              .agents/B_CALIBRATION_REPORT.md for the true r_delta spec.
+              the calibration report for the true r_delta spec.
 
 NOTE (integrator handoff): rank and band are NOT available at inference on
 the SHIPPED default decode path (verification="zncc", no
@@ -34,16 +34,16 @@ return_hypotheses — matching.py computes them only when verification !=
 "zncc" or return_hypotheses=True, lines 874-886), so this 9-feature artefact
 cannot be wired to the default path as-is. The SHIPPABLE feature sets are
 subsets of {score, zncc, peak_ratio, pose_peak, psr, apce, margin}; see
-scripts/fit_calibration.py --feature-set {6,7m,9} and the "shippable sets"
-section of .agents/B_CALIBRATION_REPORT.md for the measured comparison and
+the calibration fit tool --feature-set {6,7m,9} and the "shippable sets"
+section of the calibration report for the measured comparison and
 the winning constants the integrator should use for the shipped module.
 
 COEFS/INTERCEPT below are FROZEN constants fit offline by
-scripts/fit_calibration.py on the FULL 2,250-pair holdout
-(.agents/ext_features_full.csv) AFTER the 4-fold CV numbers were recorded —
+the calibration fit tool on the FULL 2,250-pair holdout
+(the full feature dump) AFTER the 4-fold CV numbers were recorded —
 the CV tables are the honest evidence; these constants are the shipped
 artefact refit on all of it. Do not refit them in place: an accidental refit
-fails tests/test_calibration.py::test_frozen_coefficients loudly.
+fails the frozen-coefficient test loudly.
 Public API:
   FEATURES    frozen ordered feature list
   COEFS       frozen per-feature raw-scale coefficients
@@ -60,16 +60,16 @@ import math
 import numpy as np
 
 # Frozen feature list — the 9-feature artefact (6 shipped + issue-#6
-# rank/band/margin). Order matters for the arrays in scripts/fit_calibration
+# rank/band/margin). Order matters for the arrays in the calibration fit tool
 # diagnostics; calibrate() itself is dict-keyed so ordering cannot bite.
 # See the integrator note above: rank/band are unavailable on the shipped
 # default decode path; shippable subsets are compared in
-# scripts/fit_calibration.py --feature-set and B_CALIBRATION_REPORT.md.
+# the calibration fit tool --feature-set and the calibration report.
 FEATURES = ["score", "zncc", "peak_ratio", "pose_peak",
             "psr", "apce", "rank", "band", "margin"]
 
 # Frozen constants: GD(l2=1e-3) fit on the FULL 2,250-pair holdout, post-CV,
-# emitted verbatim by `scripts/fit_calibration.py --freeze` (self-check
+# emitted verbatim by `the calibration fit tool --freeze` (self-check
 # max |P_std - P_raw| = 5.0e-16). Note on signs: raw-space coefficients mix
 # signs (pose_peak, margin negative) even though every feature correlates
 # positively with presence alone — the linear model is a joint ranker over
@@ -128,13 +128,13 @@ def design(Z):
 def fit(X, y, iters=4000, lr=0.5, l2=1e-3, seed=0):
     """Plain fixed-seed gradient-descent logistic regression.
 
-    Identical optimiser and hyperparameters to scripts/fit_rejector.py
+    Identical optimiser and hyperparameters to the rejector fit tool
     (iters=4000, lr=0.5, l2=1e-3, standardised features, intercept unregularised)
     so numbers stay comparable across the campaign. Convergence is *documented,
     not assumed*: at these hyperparameters the gradient norm falls >300x from
     its initial value on the real 2,250-pair holdout, and the parameter drift
     over the last 1,000 iterations is < 1e-3 (printed by
-    scripts/fit_calibration.py --convergence-check). Deterministic: no
+    the calibration fit tool --convergence-check). Deterministic: no
     initialisation randomness (w starts at 0), `seed` exists only for API
     stability.
     """
@@ -152,7 +152,7 @@ def fit(X, y, iters=4000, lr=0.5, l2=1e-3, seed=0):
 
 def fit_irls(X, y, ridge=1e-6, iters=100, tol=1e-10):
     """Newton/IRLS logistic fit — quadratic convergence, used by
-    scripts/fit_calibration.py for the frozen-constant artifacts and the
+    the calibration fit tool for the frozen-constant artifacts and the
     convergence diagnostics (deterministic, seed-free). Returns (w, mu, sd)
     in the same convention as fit(): w[:-1] on standardised features, w[-1]
     the intercept."""
@@ -179,13 +179,13 @@ def fit_irls(X, y, ridge=1e-6, iters=100, tol=1e-10):
 # verification feature maps), so it cannot run at inference. The SHIPPED
 # statistic is the 6-feature logistic below -- the winner of the shippable-set
 # comparison (held-out 4-fold CV AUC: 6 -> 0.9915, 6+margin -> 0.9907,
-# 9 -> 0.9911-not-shippable; .agents/B_CALIBRATION_REPORT.md ADDENDUM 2,
+# 9 -> 0.9911-not-shippable; the calibration report, addendum 2,
 # protocol identical to REJECTOR_FINDINGS.md). Its features are exactly what
 # locate() already returns, so it costs nothing at inference.
 #
 # Constants are FROZEN: GD(l2=1e-3, iters=4000, lr=0.5) -- the CV protocol's
 # optimiser -- refit on the FULL 2,250-pair holdout after CV was recorded.
-# Reproduce with: venv313/bin/python scripts/fit_calibration.py --feature-set 6
+# Reproduce with: the calibration fit tool, --feature-set 6
 # Conversion self-check max |P_std - P_raw| = 3.89e-16.
 SHIPPED_FEATURES = ["score", "zncc", "peak_ratio", "pose_peak", "psr", "apce"]
 SHIPPED_COEFS = {
@@ -220,7 +220,7 @@ def calibrate_shipped(features: dict) -> float:
     NaN, the sigmoid returns NaN, and `NaN >= threshold` evaluates False --
     silently forcing `found=0` on a pair the decode may have located perfectly.
 
-    Imputing 0.0 is not a guess: `scripts/fit_calibration.py` builds every
+    Imputing 0.0 is not a guess: `the calibration fit tool` builds every
     design matrix with `np.nan_to_num(..., nan=0.0)` (lines 132, 178, 197, 268,
     325), so a NaN feature contributed exactly 0.0 during fitting too. The
     inference path now reproduces the training preprocessing rather than
