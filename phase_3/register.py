@@ -7,14 +7,14 @@ Writes one row per input pair, in input order, with the columns the Phase 2
 contract names: pair_id, x, y, theta, scale, found, score.
 
 Scale semantics, fixed by the Phase 2 task material (slide 5 + prompt section
-2.3; see .agents/ORGANIZER_PHASE2_GROUND_TRUTH.md section 5): `scale` is the
+2.3; see the organiser ground-truth note, section 5): `scale` is the
 recovered down-scaling factor z -- nominally in [8, 12], i.e. the search
 image's nm/px -- NOT the reference-to-search linear factor 1/z (the two
 readings differ by ~100x). theta is degrees, CCW positive as displayed,
 about the match centre. x, y are written in the pixel convention of the
 grader's labels, driftsense.config.SHIPPED_LABEL_CONVENTION: "center" (the
 Phase 2 v2 extension generator: pixel i spans [i-0.5, i+0.5]) or "edge" (the
-original Phase 2 generator: pixel i spans [i, i+1)); issue #86.
+original Phase 2 generator: pixel i spans [i, i+1)).
 
 Two properties are treated as non-negotiable, because the scoring rules make
 them expensive to get wrong:
@@ -42,8 +42,9 @@ import infer as I  # noqa: E402
 from driftsense.matching import LABEL_CONVENTIONS, locate_phase2  # noqa: E402
 
 # The shipped Phase 2 operating point lives in driftsense.config (the ONE
-# definition of the shipped decode config, so eval_ext.py and the parity tests
-# consume the same value register.py does). Re-exported under the historical
+# definition of the shipped decode config, so the external evaluator and the
+# parity tests consume the same value register.py does). Re-exported under the
+# historical
 # name for backwards compatibility -- every caller in this repo imports it
 # from here.
 from driftsense.config import SHIPPED_BAND, SHIPPED_THRESHOLD  # noqa: E402
@@ -56,6 +57,19 @@ from driftsense.config import LEGACY_FALLBACK_THRESHOLD  # noqa: E402
 DEFAULT_FOUND_THRESHOLD = SHIPPED_THRESHOLD
 
 OUT_FIELDS = ["pair_id", "x", "y", "theta", "scale", "found", "score"]
+
+# Mass-failure alarm. A systematic problem -- wrong paths, a bad manifest, an
+# unreadable image set -- produces a well-formed, exit-0, all-declined
+# predictions.csv that is indistinguishable from an honest all-reject run.
+# Every pair still gets a row (that contract is never traded away), but the run
+# says loudly on stderr that it does not look like a decode. Phase 3 reads
+# these same three names off this module, so both entry points alarm alike.
+#
+# ~1 pair in 5 is genuinely absent in Phase 2, so a healthy run reports ~80%
+# found; 30% is a floor well below anything legitimate.
+MASS_FAILURE_ERROR_FRAC = 0.20
+MASS_FAILURE_FOUND_FRAC = 0.30
+MASS_FAILURE_MIN_PAIRS = 8
 
 # Candidate spellings for the two image columns. The addendum fixes `pair_id`
 # but publishes the rest of the pairs.csv layout separately, so accept the
@@ -131,9 +145,19 @@ def pick_column(fieldnames, candidates, role):
     declined row, which is exactly the silent failure this guards.
     """
     lowered = {f.lower().strip(): f for f in fieldnames}
-    for c in candidates:
-        if c in lowered:
-            return lowered[c]
+    exact = [lowered[c] for c in candidates if c in lowered]
+    if exact:
+        # Priority order is `candidates` order, and it is deterministic -- but
+        # a header carrying two accepted spellings for one role (e.g. both
+        # `reference_path` and `reference_image`) is worth saying out loud.
+        # The run is NOT aborted: the winner is well defined, and failing a
+        # graded batch over a harmless extra column would be the worse error.
+        if len(exact) > 1:
+            print(f"[warn] pairs.csv: {len(exact)} columns match the {role} "
+                  f"role -- {exact}. Using {exact[0]!r} (first by the "
+                  "documented priority order); the rest are ignored.",
+                  file=sys.stderr)
+        return exact[0]
     hits = [f for f in fieldnames                 # substring fallback
             if any(c.split("_")[0] in f.lower() for c in candidates)]
     if len(hits) == 1:
@@ -398,13 +422,13 @@ def main():
                          "the fallback uses its own calibrated "
                          "LEGACY_FALLBACK_THRESHOLD instead -- a network-calibrated "
                          "threshold applied to a raw NCC score would decide nothing "
-                         "meaningful (issue #36)")
+                         "meaningful")
     ap.add_argument("--verification", default=SHIPPED_VERIFICATION,
                     help="hypothesis selector: zncc (default) | consensus | majority. "
                          "consensus overrides the native-ZNCC winner only when the rank "
                          "and band scores pick the same different hypothesis; it was "
-                         "measured +2/0 and +1/0 rescued/broken on the PR #3 proxy; "
-                         "full 2,250-pair A/B (issue #9): +0.11 total, paired CI "
+                         "measured +2/0 and +1/0 rescued/broken on an early "
+                         "proxy; the full 2,250-pair A/B: +0.11 total, CI "
                          "spans zero, 5 broken / 6 rescued -- real but under the "
                          "promotion gate, so zncc stays the default")
     ap.add_argument("--label-convention", default=SHIPPED_LABEL_CONVENTION,
@@ -416,7 +440,7 @@ def main():
                          "generator. 'edge': pixel i spans [i, i+1) -- the "
                          "original Phase 2 generator and our own data. It "
                          "also selects the scan row whose raster-drift sample "
-                         "the label carries (issue #86)")
+                         "the label carries")
     ap.add_argument("--threads", type=int, default=0,
                     help="torch/OpenCV thread cap. 0 (default) auto-caps to "
                          "min(4, CPU cores) to match the 4-core reference "
@@ -432,7 +456,8 @@ def main():
                          "means the submission package/runtime itself is "
                          "broken, and the fallback is a materially different "
                          "algorithm -- silently swapping to it on the graded "
-                         "run is exactly what issue #36 flagged. This is a "
+                         "run is exactly the substitution this guards "
+                         "against. This is a "
                          "local/debug escape hatch; the organizer's required "
                          "command does not pass it, so the graded run either "
                          "gets the measured learned-model decode or an "
@@ -475,7 +500,7 @@ def main():
         raise SystemExit(
             "FATAL: learned model failed to load from "
             f"{a.weights!r} -- refusing to write {a.output!r} with the "
-            "classical ZNCC fallback (issue #36). Check the weights path/"
+            "classical ZNCC fallback. Check the weights path/"
             "integrity and the PyTorch install. Pass --allow-fallback to "
             "decode this batch with the classical fallback instead "
             "(local/debug only -- the graded command does not do this).")
@@ -500,6 +525,8 @@ def main():
     times = []
     t_start = time.perf_counter()
     found_count = 0
+    error_count = 0
+    mass_failure_warned = False
     total_rows = len(rows)
 
     disp = _LiveDisplay(sys.stdout, total_rows, quiet=a.quiet)
@@ -537,7 +564,7 @@ def main():
             # Declined answer, overwritten below on success. Constructed first
             # so that any failure path still has a complete row to write.
             out = {"pair_id": pid, "x": 0, "y": 0, "theta": 0, "scale": 0,
-                   "found": 0, "score": 0.0}
+                   "found": 0, "score": f"{0.0:.6f}"}
             t0 = time.perf_counter()
             try:
                 ref = I.read_gray(resolve(r[ref_col]))
@@ -568,7 +595,7 @@ def main():
                     # (P 94.2%) on the shipped 1.02M one; PR #18 reached the
                     # same conclusion separately. The value is the shipped
                     # decode config (driftsense.config), shared with
-                    # eval_ext.py so the evaluator decodes identically.
+                    # the external evaluator, so it decodes identically.
                     res = locate_phase2(model, ref, sea, device, refine=True,
                                         verification=a.verification,
                                         band=SHIPPED_BAND,
@@ -593,9 +620,11 @@ def main():
             # SystemExit for an unreadable image, and that must zero-fill
             # THIS row only -- not kill the whole batch.
             except Exception as e:                      # noqa: BLE001
+                error_count += 1
                 disp.erase()
                 print(f"[warn] pair {pid}: {type(e).__name__}: {e}", file=sys.stderr)
             except SystemExit as e:
+                error_count += 1
                 disp.erase()
                 print(f"[warn] pair {pid}: SystemExit: {e}", file=sys.stderr)
             w.writerow(out)
@@ -603,6 +632,21 @@ def main():
                 found_count += 1
             dt = time.perf_counter() - t0
             times.append(dt)
+
+            # Fire once, as early as it is meaningful: a systematic failure is
+            # worth interrupting a long batch for, not just reporting after it.
+            if (not mass_failure_warned and n + 1 >= MASS_FAILURE_MIN_PAIRS
+                    and error_count >= MASS_FAILURE_ERROR_FRAC * (n + 1)):
+                mass_failure_warned = True
+                disp.erase()
+                print("=" * 72, file=sys.stderr)
+                print(f"[MASS FAILURE] {error_count} of the first {n + 1} "
+                      "pair(s) raised. This is a systematic failure, not bad "
+                      "luck -- check that the paths in pairs.csv resolve "
+                      "relative to the CSV, and check the weights. Rows are "
+                      "still being written, but they are declines, not "
+                      "answers.", file=sys.stderr)
+                print("=" * 72, file=sys.stderr)
 
             # Machine-readable per-pair record, always: it is the audit trail
             # the harness parses. Only erase the live block when the record is
@@ -658,6 +702,29 @@ def main():
     # line, for the judge harness to parse without scraping progress text.
     print(f"# runtime: median {np.median(t):.2f} p90 {np.percentile(t,90):.2f} "
           f"max {t.max():.2f} n={len(t)}", file=sys.stderr)
+
+    # ---- End-of-run mass-failure banner ---------------------------------
+    if total_rows:
+        err_frac = error_count / total_rows
+        found_frac = found_count / total_rows
+        reasons = []
+        if err_frac >= MASS_FAILURE_ERROR_FRAC:
+            reasons.append(f"{error_count}/{total_rows} pair(s) raised "
+                           f"({err_frac:.0%}, threshold "
+                           f"{MASS_FAILURE_ERROR_FRAC:.0%})")
+        if found_frac < MASS_FAILURE_FOUND_FRAC:
+            reasons.append(f"only {found_count}/{total_rows} reported found "
+                           f"({found_frac:.0%}, expected ~80% present)")
+        if reasons:
+            # Machine-readable first, for a harness grepping stderr.
+            print(f"# mass_failure: errors={error_count} found={found_count} "
+                  f"n={total_rows}", file=sys.stderr)
+            print("=" * 72, file=sys.stderr)
+            print("[MASS FAILURE] This run does not look like a successful "
+                  "decode:", file=sys.stderr)
+            for why in reasons:
+                print(f"  - {why}", file=sys.stderr)
+            print("=" * 72, file=sys.stderr)
 
     if model is None:
         # Repeated at the end, unconditionally: a log truncated to its tail

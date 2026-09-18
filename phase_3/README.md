@@ -19,6 +19,10 @@ python3.11 -m venv venv
 ./venv/bin/pip install -r requirements.txt
 ```
 
+> On Windows the venv puts its executables in `venv\Scripts\` rather than
+> `venv/bin/`, so substitute `venv\Scripts\python` and `venv\Scripts\pip`.
+> Everything else is identical; the pinned wheels are the same.
+
 `requirements.txt` is pinned from a working environment, scoped to what this
 entry point actually imports (torch, OpenCV, NumPy, gdstk and their
 transitive dependencies). Nothing for training, plotting or notebooks.
@@ -95,9 +99,13 @@ the measured 85.00 / 85 comes from.
 
 When the column is empty, missing, or points at something reference-sized
 rather than frame-sized, the pipeline falls back to matching a *rendered*
-reference against the image. That path still answers, but it is substantially
-weaker on rotated pairs. A reference-sized "search CAD" is refused rather than
-silently misused.
+reference against the image. **That path is much weaker than the wording
+"fallback" suggests** — it is not merely less precise, it declines pairs the
+CAD path solves exactly. On the bundled sample, blanking `search_gds_path`
+takes `p0001` from `found=1` at 0.10 px to `found=0`, and the two scores
+collapse to 0.498 (present) against 0.433 (absent) — nearly no separation. Treat
+it as a diagnostic, not a graded path. A reference-sized "search CAD" is
+refused rather than silently misused.
 
 ### How paths are resolved
 
@@ -160,8 +168,9 @@ missing row scores zero, so declining beats disappearing.
 
 ### What the `score` column means
 
-It is a genuine confidence, not a copy of `found`, and it is banded so the
-ordering is meaningful for the calibration metric:
+It is a genuine confidence, not a copy of `found`, and **on the CAD path**
+(`search_gds_path` present — the graded one) it is banded so the ordering is
+meaningful for the calibration metric:
 
 | band | meaning |
 | --- | --- |
@@ -171,6 +180,12 @@ ordering is meaningful for the calibration metric:
 
 The bands are disjoint by construction, so a correct pair with a weak pose fit
 never ranks below a pair whose pose was never established.
+
+**These bands do not apply to the fallback path.** When `search_gds_path` is
+absent the score is the learned model's own confidence, compared against
+`--threshold`; it is not banded, and a value inside `[0.10, 1.00]` there does
+**not** mean a verified match. The bundled sample shows exactly this: 0.433 on
+an absent pair with `found=0`.
 
 ---
 
@@ -186,11 +201,17 @@ never ranks below a pair whose pose was never established.
 | `--quiet` | off | suppress per-pair progress |
 | `--allow-fallback` | off | decode with the classical matcher if the checkpoint will not load. **Local debugging only** — never for a graded run |
 
-The remaining flags (`--render-size`, `--min-layer`, `--label-convention`,
-`--rotation-bounds`, `--scale-bounds`, `--confidence`, `--reference-blur`,
-`--coarse-scales`, `--subpixel-rows`, `--verification`) exist so the shipped
-constants can be A/B'd. Every default is the measured value; you should not
-need to touch any of them.
+The remaining four exist so the shipped constants can be A/B'd. Every
+default is the measured value; you should not need to touch any of them.
+
+| flag | default | what it does |
+| --- | --- | --- |
+| `--render-size` | `gds.REF_SIZE` | edge of the raster the `.gds` reference is rendered to |
+| `--min-layer` | `0` | lowest GDS layer number to render |
+| `--verification` | shipped | hypothesis selector on the fallback path: `zncc` \| `consensus` \| `majority` |
+| `--no-cad` | off | skip the CAD-anchored path entirely and match the *rendered* reference against the image. This is the weak fallback described in §4 — it is not the graded path, and it will decline pairs the CAD path localises exactly. **Debugging only** |
+
+`phase3.py --help` is the authority; it lists exactly these and nothing else.
 
 ---
 

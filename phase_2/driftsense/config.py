@@ -2,9 +2,9 @@
 
 Every entry point that decodes or scores Phase 2 pairs must read these values
 from here, never from a local literal, so the batch submission path
-(register.py), the external evaluator (scripts/eval_ext.py) and the parity
-tests cannot drift apart. The parity test (tests/test_submission_parity.py)
-pins register.py and eval_ext.py against this module.
+(register.py), the external evaluator (the external evaluator) and the parity
+tests cannot drift apart. The parity test (the submission parity test)
+pins register.py and the external evaluator against this module.
 
 These are calibrated choices, not spec-derived constants:
 
@@ -35,7 +35,7 @@ SHIPPED_SUBPIXEL_ROWS = True: the native-ZNCC winner; consensus/majority
   with 95% CI [+0.410, +0.773] and P(delta >= +0.35) = 0.994, so it clears
   the issue #19 promotion gate. Costs 1.9 ms median per pair. Pose,
   rejection and calibration are bit-identical -- the correction moves only x.
-  Evidence: .agents/SUBPIXEL_DRIFT.md. Set to False to revert entirely.
+  Evidence: the sub-pixel drift report. Set to False to revert entirely.
 * SHIPPED_LABEL_CONVENTION = "center": the pixel convention the grader's
   (x, y) labels are written in. It is a property of the dataset, not of the
   model -- see the block above the constant (issue #86).
@@ -48,14 +48,15 @@ from __future__ import annotations
 #             (score, zncc, peak_ratio, pose_peak, psr, apce) via
 #             driftsense.calibration.calibrate(). Frozen constants were fit
 #             offline on the 2,250-pair holdout AFTER 4-fold CV
-#             (.agents/B_CALIBRATION_REPORT.md); held-out AUC 0.9877 ->
+#             (the calibration report); held-out AUC 0.9877 ->
 #             0.9915. Zero inference cost, no decode change.
 #   "legacy_min": the historical min(network score, native ZNCC).
 #   "min_med3": min(network score, ZNCC on a 3x3-median copy of the search
 #             frame at the final pose and the rigid answer) -- issue #87. The
 #             median touches this one number only; network and localisation
 #             keep the raw frame. See the block above SHIPPED_THRESHOLD.
-# The parity test pins register.py and eval_ext.py to this module's values.
+# The parity test pins register.py and the external evaluator to this
+# module's values.
 # --------------------------------------------------------------------------
 # Uncontested-hypothesis early exit (PR #51).
 #
@@ -72,8 +73,8 @@ from __future__ import annotations
 # the runner-up); None means that term is not tested. A gate fires only on the
 # FIRST hypothesis, and only when a second hypothesis exists.
 #
-# Both gates are validated in .agents/PR51_CAMPAIGN.md against a full
-# no-early-exit decode of the same pairs; tests/test_early_exit_gates.py pins
+# Both gates are validated in the rotation campaign report against a full
+# no-early-exit decode of the same pairs; the early-exit gate test pins
 # these numbers so the documentation and the code cannot drift apart again.
 EARLY_EXIT_GATES = (
     (0.85, 0.75, 0.25, None),   # uncontested: no rival peak worth checking
@@ -84,10 +85,10 @@ SHIPPED_CONFIDENCE = "min_med3"
 
 # Found threshold, in the units of whichever SHIPPED_CONFIDENCE is active.
 # The statistic and its threshold are ONE unit system -- change both or
-# neither (tests/test_submission_parity.py pins the coupling, not the value).
+# neither (the submission parity test pins the coupling, not the value).
 #
 # Current: SHIPPED_CONFIDENCE="min_med3" gated at 0.55 (issue #87), chosen on
-# the v2 dev split only (scripts/gen_phase2_v2_val.py, 500 pairs, seed
+# the v2 dev split only (the v2 validation generator, 500 pairs, seed
 # 850001) and confirmed on untouched splits -- see below.
 #
 # Why the statistic changed: on the dev split the historical legacy_min cannot
@@ -120,7 +121,7 @@ SHIPPED_CONFIDENCE = "min_med3"
 # Previous pairings, kept consistent if ever restored: "legacy_min" -> 0.18
 # (swept on the original Phase 2 distribution); "fused6" -> 0.4870 (a
 # calibrated P(present), re-tuned on the 2,250 holdout against the total
-# rubric -- .agents/B_CALIBRATION_REPORT.md Result 4b).
+# rubric -- the calibration report Result 4b).
 SHIPPED_THRESHOLD = 0.55
 # The no-weights ZNCC fallback in register.py scores a raw NCC, which is
 # neither unit system above, so it carries its own gate. Raised 0.18 -> 0.55 on
@@ -163,7 +164,7 @@ SHIPPED_SUBPIXEL_ROWS = True
 # Refine rotation from the vertical offsets of vertical template strips, and
 # blend that with polish_pose's answer (driftsense.matching.strip_rotation,
 # issue #88). ONE definition; register.py passes it to locate_phase2
-# (strip_rot=...), and tests/test_submission_parity.py pins that.
+# (strip_rot=...), and the submission parity test pins that.
 #
 # Why a second estimator at all: polish_pose fits rotation with a 2-D ZNCC,
 # and on a raster-scanned frame one of those two dimensions is corrupted. A
@@ -215,14 +216,14 @@ SHIPPED_STRIP_ROTATION = True
 
 # Pixel convention of the grader's (x, y) labels (issue #86). ONE definition;
 # register.py passes it to locate_phase2 (label_convention=...), and
-# tests/test_submission_parity.py pins that.
+# the submission parity test pins that.
 #   "edge":   pixel i spans [i, i+1), so a template placed at top-left p has
 #             its centre at p + tw/2. Our own generator (driftsense.generate:
 #             area_convention_offset), our training labels and the original
 #             Phase 2 generator (generator/src/pipeline.py: gt_x0 + box_w/2)
 #             are written this way, so locate_phase2 keeps "edge" as its
 #             signature default and every internal evaluator on that data
-#             (engine.evaluate, scripts/eval_ext.py) stays correct as it is.
+#             (engine.evaluate, the external evaluator) stays correct as it is.
 #   "center": pixel i spans [i-0.5, i+0.5] -- OpenCV warpAffine coordinates.
 #             The mentor's Phase 2 v2 (extension) generator labels
 #             M @ (x0 + 499.5, y0 + 499.5) with the canvas centre (N-1)/2
@@ -261,14 +262,14 @@ SHIPPED_LABEL_CONVENTION = "center"
 # p014 -- its ~1.03-1.10 px error is upstream of sub-pixel refinement -- so
 # it cannot break the 39.27 localisation tie. Synthetic accuracy tests are
 # mixed. Revisit only with the full 2,250-pair paired bootstrap
-# (.agents/C_LOCALIZATION_REPORT.md, .agents/integrator_ext60_tmp.py output).
+# (the localisation report, the ext-60 integrator run output).
 SHIPPED_SUBPIXEL = "parabola"
 
 
 # ---------------------------------------------------------------------------
 # Phase 3 decode (phase3.py). The CAD reference is rendered by driftsense.gds;
 # everything after that is locate_phase2 with the settings below. Measured on
-# seed-disjoint splits of generator_i4c/generate_cad_varied.py -- see
+# seed-disjoint splits of the varied-CAD generator -- see
 # docs/PHASE3_MEASUREMENT.md for each number.
 # ---------------------------------------------------------------------------
 

@@ -181,7 +181,7 @@ def load_model(weights_path: str):
     model = model.to(device)
 
     # CPU is the graded configuration (4 cores, no GPU, 5 s median), and there
-    # the network is 90.6% of pair time -- measured with scripts/profile_pair.py
+    # the network is 90.6% of pair time -- measured with the per-pair profiler
     # on the CPU-only venv. NCHW forces oneDNN to reorder activations on every
     # convolution; channels_last lets it keep the blocked layout across the
     # whole stack.
@@ -239,8 +239,8 @@ def predict(reference_path: str, search_path: str, weights_path: str = DEFAULT_W
 
     model, device = loaded
 
-    # One shared decode policy with evaluate.py (audit C-01): pose estimation
-    # and adaptive routing live in driftsense.policy, not here.
+    # One shared decode policy with the development evaluator: pose
+    # estimation and adaptive routing live in driftsense.policy, not here.
     from driftsense.policy import predict_policy
     return predict_policy(model, reference, search, device, tta=tta,
                           want_heatmap=want_heatmap,
